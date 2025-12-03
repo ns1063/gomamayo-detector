@@ -1,0 +1,2 @@
+# gomamayo-detector
+ゴママヨW
