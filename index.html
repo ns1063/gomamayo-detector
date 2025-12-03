@@ -91,6 +91,11 @@
             color: #1976d2;
             font-size: 14px;
         }
+        .error-message {
+            color: red;
+            text-align: center;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -142,7 +147,7 @@
                 await initializeTokenizer();
                 resultsDiv.innerHTML = '<p class="no-results">テキストを入力して「解析」ボタンを押してください。</p>';
             } catch (error) {
-                resultsDiv.innerHTML = '<p style="color: red;">エラー: 辞書の読み込みに失敗しました。</p>';
+                resultsDiv.innerHTML = '<p class="error-message">エラー: 辞書の読み込みに失敗しました。</p>';
                 console.error(error);
             }
         });
@@ -156,26 +161,26 @@
             }
 
             if (!tokenizer) {
-                resultsDiv.innerHTML = '<p style="color: red;">エラー: 辞書がまだ読み込まれていません。</p>';
+                resultsDiv.innerHTML = '<p class="error-message">エラー: 辞書がまだ読み込まれていません。</p>';
                 return;
             }
 
             analyzeBtn.disabled = true;
             resultsDiv.innerHTML = '<p class="loading">解析中...</p>';
 
-            // Use setTimeout to allow UI update
-            setTimeout(() => {
+            // Use requestAnimationFrame to allow UI update
+            requestAnimationFrame(() => {
                 try {
                     const tokens = tokenizer.tokenize(inputText);
                     const gomamayoResults = detectGomamayo(tokens);
                     displayResults(gomamayoResults);
                 } catch (error) {
-                    resultsDiv.innerHTML = '<p style="color: red;">エラー: 解析中に問題が発生しました。</p>';
+                    resultsDiv.innerHTML = '<p class="error-message">エラー: 解析中に問題が発生しました。</p>';
                     console.error(error);
                 } finally {
                     analyzeBtn.disabled = false;
                 }
-            }, 100);
+            });
         }
 
         function detectGomamayo(tokens) {
@@ -186,9 +191,11 @@
                 const nextToken = tokens[i + 1];
                 
                 // Get reading (pronunciation) for each token
-                const currentReading = currentToken.reading || currentToken.surface_form;
-                const nextReading = nextToken.reading || nextToken.surface_form;
+                // Only use tokens with proper readings, not surface forms
+                const currentReading = currentToken.reading;
+                const nextReading = nextToken.reading;
                 
+                // Skip if either token doesn't have a proper reading
                 if (!currentReading || !nextReading) {
                     continue;
                 }
