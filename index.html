@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ゴママヨ検出器</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .description {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .input-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .results-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        .result-item {
+            padding: 15px;
+            margin: 10px 0;
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 4px;
+        }
+        .result-item strong {
+            color: #d32f2f;
+        }
+        .no-results {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+        .word-pair {
+            font-size: 18px;
+            margin: 5px 0;
+        }
+        .reading {
+            color: #1976d2;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>ゴママヨ検出器</h1>
+    
+    <div class="description">
+        <strong>ゴママヨとは？</strong>
+        <p>前の単語の読みの最後の文字と、次の単語の読みの最初の文字が一致する現象のことです。</p>
+        <p>例: 「<strong>ごま</strong>」(ゴマ) + 「<strong>ま</strong>ヨネーズ」(マヨネーズ) = ゴマ<strong>マ</strong>ヨネーズ</p>
+    </div>
+
+    <div class="input-section">
+        <label for="inputText"><strong>テキストを入力してください：</strong></label>
+        <textarea id="inputText" placeholder="ここに日本語のテキストを入力してください...&#10;例: ごまマヨネーズ"></textarea>
+        <button id="analyzeBtn" onclick="analyzeText()">解析</button>
+    </div>
+
+    <div class="results-section">
+        <h2>検出結果</h2>
+        <div id="results"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js"></script>
+    <script>
+        let tokenizer = null;
+        const resultsDiv = document.getElementById('results');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+
+        // Initialize kuromoji tokenizer
+        function initializeTokenizer() {
+            return new Promise((resolve, reject) => {
+                kuromoji.builder({ 
+                    dicPath: "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/"
+                }).build((err, builtTokenizer) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        tokenizer = builtTokenizer;
+                        resolve();
+                    }
+                });
+            });
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            resultsDiv.innerHTML = '<p class="loading">辞書を読み込み中...</p>';
+            try {
+                await initializeTokenizer();
+                resultsDiv.innerHTML = '<p class="no-results">テキストを入力して「解析」ボタンを押してください。</p>';
+            } catch (error) {
+                resultsDiv.innerHTML = '<p style="color: red;">エラー: 辞書の読み込みに失敗しました。</p>';
+                console.error(error);
+            }
+        });
+
+        function analyzeText() {
+            const inputText = document.getElementById('inputText').value.trim();
+            
+            if (!inputText) {
+                resultsDiv.innerHTML = '<p class="no-results">テキストを入力してください。</p>';
+                return;
+            }
+
+            if (!tokenizer) {
+                resultsDiv.innerHTML = '<p style="color: red;">エラー: 辞書がまだ読み込まれていません。</p>';
+                return;
+            }
+
+            analyzeBtn.disabled = true;
+            resultsDiv.innerHTML = '<p class="loading">解析中...</p>';
+
+            // Use setTimeout to allow UI update
+            setTimeout(() => {
+                try {
+                    const tokens = tokenizer.tokenize(inputText);
+                    const gomamayoResults = detectGomamayo(tokens);
+                    displayResults(gomamayoResults);
+                } catch (error) {
+                    resultsDiv.innerHTML = '<p style="color: red;">エラー: 解析中に問題が発生しました。</p>';
+                    console.error(error);
+                } finally {
+                    analyzeBtn.disabled = false;
+                }
+            }, 100);
+        }
+
+        function detectGomamayo(tokens) {
+            const results = [];
+            
+            for (let i = 0; i < tokens.length - 1; i++) {
+                const currentToken = tokens[i];
+                const nextToken = tokens[i + 1];
+                
+                // Get reading (pronunciation) for each token
+                const currentReading = currentToken.reading || currentToken.surface_form;
+                const nextReading = nextToken.reading || nextToken.surface_form;
+                
+                if (!currentReading || !nextReading) {
+                    continue;
+                }
+                
+                // Get the last character of current word's reading
+                const lastChar = currentReading.charAt(currentReading.length - 1);
+                // Get the first character of next word's reading
+                const firstChar = nextReading.charAt(0);
+                
+                // Check if they match
+                if (lastChar === firstChar) {
+                    results.push({
+                        word1: currentToken.surface_form,
+                        reading1: currentReading,
+                        word2: nextToken.surface_form,
+                        reading2: nextReading,
+                        matchChar: lastChar,
+                        position: i
+                    });
+                }
+            }
+            
+            return results;
+        }
+
+        function displayResults(results) {
+            if (results.length === 0) {
+                resultsDiv.innerHTML = '<p class="no-results">ゴママヨは検出されませんでした。</p>';
+                return;
+            }
+
+            let html = `<p><strong>${results.length}件のゴママヨが検出されました：</strong></p>`;
+            
+            results.forEach((result, index) => {
+                html += `
+                    <div class="result-item">
+                        <div><strong>🔍 ゴママヨ #${index + 1}</strong></div>
+                        <div class="word-pair">
+                            「${result.word1}」 + 「${result.word2}」
+                        </div>
+                        <div class="reading">
+                            読み: ${result.reading1} + ${result.reading2}
+                        </div>
+                        <div style="margin-top: 8px;">
+                            一致文字: <strong style="font-size: 20px; color: #d32f2f;">${result.matchChar}</strong>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
